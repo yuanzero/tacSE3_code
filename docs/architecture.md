@@ -22,6 +22,7 @@ to `demo_feedback.py` do not feed back into that path.
 | `ball_demo.py` | Session lifecycle, sensor reads, keyboard input and recording |
 | `demo_view.py` | Image panels, arrows and fixed-range trace rendering |
 | `demo_feedback.py` | Pure display-state/filter logic, independent of SDK and GUI |
+| `demo_pose.py` | Bridge selected display vectors to per-sensor Open3D windows |
 | `observe.py` | Bounded sensor-only recording and report |
 | `offline_replay.py` | Explicit-unit numerical replay |
 | `core/units.py` | Nominal scale and SDK unit conversion |

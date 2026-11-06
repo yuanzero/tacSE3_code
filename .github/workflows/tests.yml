@@ -15,5 +15,5 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install -e '.[headless,dev]'
       - run: python -B -m unittest discover -s tests -v
-      - run: python -m black --check tacse3/ball_demo.py tacse3/demo_view.py tacse3/demo_feedback.py scripts/review_feedback.py tests/test_ball_demo.py tests/test_demo_feedback.py
+      - run: python -m black --check tacse3/ball_demo.py tacse3/demo_view.py tacse3/demo_feedback.py tacse3/demo_pose.py scripts/review_feedback.py tests/test_ball_demo.py tests/test_demo_feedback.py tests/test_demo_pose.py
       - run: python -m build

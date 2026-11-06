@@ -20,6 +20,10 @@ pip install -e ".[demo]"
 python -m tacse3.ball_demo --sensor-serial SERIAL1 SERIAL2
 ```
 
+安装 `pip install -e ".[viz]"` 可启用 Open3D 三维坐标轴。
+检测到 Open3D 时，每颗传感器自动打开一个三维窗口；`--pose3d on` 要求启用三维，
+`--pose3d off` 仅显示二维面板。三维窗口与曲线共用显示模式和归零参考。
+
 1. 传感器无接触时启动，等待初始化完成。
 2. 放入适合现有间距的球，缓慢拨动、停顿、反向拨动。
 3. 按 **Z** 将显示归零，**R** 切换原始/平滑显示，**S** 保存快照，**Q** 退出。
@@ -55,6 +59,7 @@ tacse3/                      Python 主包
 ├── ball_demo.py             交互演示与会话记录
 ├── demo_view.py             图像面板与历史曲线
 ├── demo_feedback.py         显示状态与平滑
+├── demo_pose.py             三维坐标轴接入
 ├── observe.py               传感器采集与报告
 ├── offline_replay.py        离线回放
 ├── run_monitor.py           主监控入口

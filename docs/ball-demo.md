@@ -29,6 +29,21 @@ marked; numerical values are not clamped.
 
 ## Display filtering
 
+With Open3D installed (`.[viz]`), the demo also opens a 3D window for each sensor.
+Grey axes are the fixed reference; RGB axes show the current relative estimate.
+The 3D view uses exactly the selected raw/smooth vector and display zero used by
+the numerical panel, interpreted as a rotation vector in radians. It does not
+accumulate repeated frames or display translation. Missing estimates remove the
+moving axes while retaining the reference frame. The original monitor's separate
+cumulative view remains available through that monitor.
+
+`--pose3d auto` is the default; `on` reports an error if 3D cannot start, and `off`
+disables 3D. Static headless previews do not open Open3D. Keyboard shortcuts are
+handled by the 2D dashboard; focus it before pressing Z/R/S/Q. The same keys apply
+to both the 2D and 3D views. Q closes all demo windows.
+Closing an individual 3D window leaves acquisition and the other views running.
+Restart the demo to reopen that window.
+
 The estimator still receives the same depth and shear with the same 0.5 nominal
 mm contact threshold. Stabilization is downstream, in `demo_feedback.py`:
 
@@ -64,9 +79,12 @@ zero angles. Values are per-sensor estimates, not a fused absolute ball pose.
 | `session.json` | Schema version, serials, nominal scale and display settings |
 | `estimates.jsonl` | Raw estimates, response metrics, filtered display and keyboard events |
 | `latest-display.jpg` | Most recent full display, updated every two seconds |
+| `latest-3d-SERIAL.png` | Latest 3D view when enabled |
 | `peak-SERIAL.npz` | Image, depth and shear at strongest observed shear response |
 | `peak-SERIAL.json` / `.png` | Matching result and panel at that peak |
+| `peak-3d-SERIAL.png` | Matching 3D peak view when enabled |
 | `TIMESTAMP-SERIAL.npz` / `TIMESTAMP-display.png` | Manual snapshots |
+| `TIMESTAMP-3d-SERIAL.png` | Manual 3D snapshots when enabled |
 
 One peak per sensor is overwritten when a stronger response arrives. Peaks for
 different sensors can occur at different times. They must not be treated as a

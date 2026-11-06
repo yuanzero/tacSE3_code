@@ -34,6 +34,9 @@ python -m tacse3.ball_demo --sensor-serial SERIAL1 SERIAL2
 ```
 
 Use a desktop terminal with GUI-enabled OpenCV.
+Install `.[viz]` to include Open3D coordinate-frame windows. The demo opens one
+3D window per sensor when Open3D is available; `--pose3d on` requires 3D support
+and `--pose3d off` selects the 2D-only view.
 
 1. Wait for sensor initialization with the surfaces unloaded.
 2. Place a suitable ball between the stationary fingertips and turn it by hand.
@@ -63,6 +66,7 @@ tacse3/
   ball_demo.py                 Interactive sensor-only demo
   demo_view.py                 Image panels and history charts
   demo_feedback.py             Display state and smoothing
+  demo_pose.py                 Per-sensor 3D coordinate windows
   observe.py                   Sensor recording and reports
   offline_replay.py            Saved-array replay
   run_monitor.py              Main monitor CLI

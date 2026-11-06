@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import importlib.util
 import time
 from collections import deque
 from pathlib import Path
@@ -11,6 +12,7 @@ from .offline_replay import replay
 from .core.units import NOMINAL_MM_PER_PIXEL, pixels_per_mm
 from .demo_view import render_panel, response_metrics
 from .demo_feedback import DisplayFeedback, FeedbackConfig
+from .demo_pose import PosePanels
 
 
 def main(argv=None):
@@ -44,6 +46,12 @@ def main(argv=None):
     parser.add_argument(
         "--raw-display", action="store_true", help="Start with unfiltered estimator display"
     )
+    parser.add_argument(
+        "--pose3d",
+        choices=["auto", "on", "off"],
+        default="auto",
+        help="Open per-sensor 3D coordinate windows (auto when Open3D is installed)",
+    )
     args = parser.parse_args(argv)
     if args.preview_output and not args.sample:
         parser.error("--preview-output requires --sample")
@@ -74,12 +82,26 @@ def main(argv=None):
     import cv2
 
     sensors, zeros, histories, peaks, feedback = [], {}, {}, {}, {}
+    pose_panels = None
+    pose3d_status = "off"
     # A still image has no temporal history to smooth.
     raw_mode = args.raw_display or args.sample is not None
     last_preview = 0.0
     last_tick = time.monotonic()
     fps = 0.0
     try:
+        serials = ["OFFLINE SAMPLE"] if args.sample else args.sensor_serial
+        if not args.preview_output and args.pose3d != "off":
+            try:
+                if importlib.util.find_spec("open3d") is None:
+                    raise ImportError('Install the viz extra for Open3D: pip install -e ".[viz]"')
+                pose_panels = PosePanels(serials)
+                pose3d_status = "on"
+            except (ImportError, RuntimeError) as error:
+                if args.pose3d == "on":
+                    raise
+                pose3d_status = "unavailable"
+                print(f"3D view unavailable: {error}", flush=True)
         if args.sample:
             with np.load(args.sample, allow_pickle=False) as data:
                 saved = tuple(data[k].copy() for k in ("image", "depth", "shear"))
@@ -107,6 +129,7 @@ def main(argv=None):
                     chart_limit_deg=args.chart_limit_deg,
                     sample=str(args.sample) if args.sample else None,
                     actuator_commands_sent=0,
+                    pose3d=pose3d_status,
                 ),
                 indent=2,
             ),
@@ -163,6 +186,8 @@ def main(argv=None):
                         if raw_mode
                         else stabilized
                     )
+                    if pose_panels is not None:
+                        pose_panels.update(serial, result, zeros.get(serial))
                     log.write(json.dumps(result) + "\n")
                     results[serial] = result
                     frames[serial] = dict(image=image, depth=depth, shear=shear)
@@ -192,6 +217,8 @@ def main(argv=None):
                             json.dumps(result, indent=2), encoding="utf-8"
                         )
                         cv2.imwrite(str(args.output / f"peak-{serial}.png"), panels[-1])
+                        if pose_panels is not None:
+                            pose_panels.capture(args.output, "peak", sensor_serial=serial)
                 tick = time.monotonic()
                 fps = (
                     0.9 * fps + 0.1 / max(tick - last_tick, 1e-6)
@@ -202,7 +229,8 @@ def main(argv=None):
                 footer = np.full((65, 960, 3), (28, 22, 18), np.uint8)
                 cv2.putText(
                     footer,
-                    "TACSE3 | Z zero  R raw/smooth  S save  Q quit | %.1f Hz | auto-save" % fps,
+                    "TACSE3 | Z zero  R raw/smooth  S save  Q quit | %.1f Hz | 3D %s"
+                    % (fps, pose3d_status),
                     (20, 23),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.55,
@@ -223,6 +251,8 @@ def main(argv=None):
                 canvas = np.vstack(panels + [footer])
                 if tick - last_preview > 2:
                     cv2.imwrite(str(args.output / "latest-display.jpg"), canvas)
+                    if pose_panels is not None:
+                        pose_panels.capture(args.output, "latest")
                     last_preview = tick
                 if args.preview_output:
                     if not cv2.imwrite(str(args.preview_output), canvas):
@@ -266,8 +296,12 @@ def main(argv=None):
                     for serial, data in frames.items():
                         np.savez_compressed(args.output / f"{stamp}-{serial}.npz", **data)
                     cv2.imwrite(str(args.output / f"{stamp}-display.png"), canvas)
+                    if pose_panels is not None:
+                        pose_panels.capture(args.output, str(stamp))
                 log.flush()
     finally:
+        if pose_panels is not None:
+            pose_panels.close()
         for sensor in sensors:
             sensor.disconnect()
         if not args.preview_output:

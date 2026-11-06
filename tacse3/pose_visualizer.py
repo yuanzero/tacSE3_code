@@ -19,7 +19,7 @@ def arrow_mesh(origin, vector, cylinder_radius=0.002, cone_radius=0.004, cylinde
     mesh_cyl = o3d.geometry.TriangleMesh.create_cylinder(radius=cylinder_radius, height=cyl_len, resolution=resolution, split=4)
     mesh_cone = o3d.geometry.TriangleMesh.create_cone(radius=cone_radius, height=cone_len, resolution=resolution, split=1)
     mesh_cyl.translate((0, 0, cyl_len / 2.0))
-    mesh_cone.translate((0, 0, cyl_len + cone_len / 2.0))
+    mesh_cone.translate((0, 0, cyl_len))
     arrow = mesh_cyl + mesh_cone
     arrow.compute_vertex_normals()
     z_axis = np.array([0.0, 0.0, 1.0])
@@ -27,7 +27,7 @@ def arrow_mesh(origin, vector, cylinder_radius=0.002, cone_radius=0.004, cylinde
         rot_axis = np.cross(z_axis, direction)
         rot_axis_norm = np.linalg.norm(rot_axis)
         if rot_axis_norm < 1e-8:
-            R = np.eye(3)
+            R = np.diag([-1.0, 1.0, -1.0]) if direction[2] < 0 else np.eye(3)
         else:
             rot_axis = rot_axis / rot_axis_norm
             angle = np.arccos(np.clip(z_axis @ direction, -1.0, 1.0))
@@ -59,6 +59,8 @@ class PoseVisualizer:
         show_cumulative=True,
         min_change_deg=0.0,
         axis_mapping=("x", "y", "z"),
+        left=50,
+        top=50,
     ):
         """Create visualizer.
 
@@ -75,6 +77,8 @@ class PoseVisualizer:
         """
         self.show_angular_velocity = bool(show_angular_velocity)
         self.show_cumulative = bool(show_cumulative)
+        self._window_left = int(left)
+        self._window_top = int(top)
 
         self.angular_vis = None
         self._geoms = {}
@@ -144,13 +148,20 @@ class PoseVisualizer:
 
     def _create_visualizer(self, window_name, width, height):
         vis = o3d.visualization.Visualizer()
-        vis.create_window(window_name, width=width, height=height)
+        if not vis.create_window(window_name, width=width, height=height,
+                                 left=self._window_left, top=self._window_top):
+            raise RuntimeError("Open3D could not create a window; a desktop/OpenGL session is required")
         return vis
 
     def _add_frame(self, vis, geoms):
         frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.02)
         vis.add_geometry(frame)
         geoms['frame'] = frame
+        view = vis.get_view_control()
+        view.set_lookat([0.0, 0.0, 0.0])
+        view.set_front([1.0, 1.0, 1.0])
+        view.set_up([0.0, 1.0, 0.0])
+        view.set_zoom(1.6)
 
     def _remove_geometry(self, vis, geoms, key):
         if key in geoms:
@@ -165,7 +176,7 @@ class PoseVisualizer:
             vec = rotation_matrix @ axes[i]
             arrow = arrow_mesh(origin, vec, cylinder_radius=0.002, cone_radius=0.004)
             arrow.paint_uniform_color(colors[i])
-            vis.add_geometry(arrow)
+            vis.add_geometry(arrow, reset_bounding_box=False)
             geoms[f'{prefix}{i}'] = arrow
 
     def _pose_to_transform(self, pose):
@@ -247,6 +258,19 @@ class PoseVisualizer:
             self.vis.destroy_window()
         if self.cumulative_vis is not None:
             self.cumulative_vis.destroy_window()
+
+    def clear_rotation(self):
+        """Show reference axes only when the current estimate is unavailable."""
+        for vis, geoms in [(self.angular_vis, self._geoms),
+                           (self.cumulative_vis, self._cumulative_geoms),
+                           (self.vis if self.angular_vis is None and self.cumulative_vis is None else None,
+                            self._geoms)]:
+            if vis is not None:
+                for key in list(geoms):
+                    if key != 'frame':
+                        self._remove_geometry(vis, geoms, key)
+                vis.poll_events()
+                vis.update_renderer()
 
     def reset_cumulative(self):
         """Reset cumulative rotation to zero and remove cumulative axes from the scene."""
