@@ -1,5 +1,23 @@
 import numpy as np
-from .math_utils import rotvec_to_matrix, matrix_to_pose
+from .math_utils import rotvec_to_matrix, matrix_to_pose, matrix_to_rotvec, clamp_rotation_step
+
+
+def request_rotation(req):
+    """Enforce the relative rotation limit after request gains."""
+    limit = req.get('max_step_deg', 3.0)
+    if req.get('send_delta', False):
+        vector = np.asarray(req.get('omega_rad', np.zeros(3)), dtype=float)
+        gain = float(req.get('delta_scale', .02))
+        if not np.isfinite(gain):
+            raise ValueError('delta_scale must be finite')
+        vector = vector * gain
+    elif req.get('R') is not None:
+        vector = matrix_to_rotvec(req['R'])
+    elif 'omega_rad' in req:
+        vector = np.asarray(req['omega_rad'], dtype=float)
+    else:
+        raise ValueError('rotation request has neither R nor omega_rad')
+    return rotvec_to_matrix(clamp_rotation_step(vector, limit))
 
 def compute_action_from_pose(p, rvec_cur, R_est, multiply='left', frame='global', tool_offset_z=0.0):
     """

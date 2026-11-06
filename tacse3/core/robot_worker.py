@@ -3,7 +3,7 @@ import time
 import logging
 import numpy as np
 from .math_utils import rotvec_to_matrix, euler_angles_to_rotation_matrix
-from .robot_control import compute_action_from_pose
+from .robot_control import compute_action_from_pose, request_rotation
 
 log = logging.getLogger("daimon_robot_worker")
 
@@ -82,31 +82,7 @@ class RobotWorker(threading.Thread):
                 log.warning('RobotWorker getActualTCPPose failed: %s', e)
                 continue
             try:
-                # Unified logic: Always use compute_action_from_pose.
-                # If send_delta is True, we interpret the input as a "small delta rotation"
-                # to be applied to the current pose (in the chosen frame).
-                if req.get('send_delta', False):
-                    omega_rad = req.get('omega_rad')
-                    if omega_rad is None:
-                        # if only R is provided, try to extract omega, or just treat R as the delta
-                        # For safety, if omage_rad is missing in delta mode, we default to 0
-                        omega_rad = np.zeros(3, dtype=float)
-                    
-                    # Apply scaling to the delta vector
-                    scale = float(req.get('delta_scale', 0.02))
-                    rvec_delta = np.asarray(omega_rad, dtype=float) * scale
-                    
-                    # Convert the scaled delta vector to a Rotation Matrix
-                    R_use = rotvec_to_matrix(rvec_delta)
-                else:
-                    # Absolute target mode (or raw R application)
-                    R_use = req.get('R')
-                    if R_use is None and 'omega_rad' in req:
-                        try:
-                            R_use = euler_angles_to_rotation_matrix(np.asarray(req['omega_rad'], dtype=float))
-                        except Exception:
-                            R_use = np.eye(3)
-
+                R_use = request_rotation(req)
                 # Now apply this rotation (whether delta or absolute) using the correct frame/offset logic
                 action = compute_action_from_pose(
                     cur[:3], 

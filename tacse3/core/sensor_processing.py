@@ -1,10 +1,15 @@
 import numpy as np
+from .units import shear_to_m_scale
 
-def build_contact_from_daimon(depth, shear, ppmm, depth_in_mm=False,
+def build_contact_from_daimon(depth, shear, ppmm, depth_in_mm=True,
                               shear_scale=1.0, contact_thresh_mm=0.5,
-                              baseline_depth_mm=None, press_increases_depth=False):
+                              baseline_depth_mm=None, press_increases_depth=False,
+                              shear_unit='dmv1-code'):
     """
     Process raw depth and shear frames into metric units and a contact mask.
+    Default units target the audited DMV1 SDK (see core.units); nominal only.
+    For already metric input explicitly pass shear_unit='m'. shear_scale is a
+    dimensionless gain applied after the unit conversion.
     """
     depth_arr = np.array(depth, dtype=np.float32)
     if not depth_in_mm:
@@ -14,16 +19,13 @@ def build_contact_from_daimon(depth, shear, ppmm, depth_in_mm=False,
 
     shear_arr = None
     if shear is not None:
-        shear_arr = np.array(shear, dtype=np.float32) * float(shear_scale)
+        shear_arr = np.array(shear, dtype=np.float32) * shear_to_m_scale(shear_unit, ppmm) * float(shear_scale)
         if shear_arr.ndim != 3 or shear_arr.shape[2] != 2:
             raise ValueError("shear must have shape (H, W, 2)")
     
     # Calculate depth in meters (for later use, though function returns depth_mm primarily for thresholding)
     depth_m = depth_mm * 1e-3
     
-    # Process shear to meters
-    # shear is usually in pixels? The scale factor accounts for this to some extent.
-    # The original code passes shear through.
     
     # Create contact mask
     if baseline_depth_mm is not None:
@@ -47,9 +49,6 @@ def build_contact_from_daimon(depth, shear, ppmm, depth_in_mm=False,
     
     # Original function returned (depth_m, shear_m, C_mask)
     if shear_arr is not None:
-         # Assuming shear_arr is already scaled appropriately or is raw
-         # If ppmm is provided, we might want to scale shear from pixels?
-         # The original implementation mainly just multiplied by shear_scale
          shear_out = shear_arr 
     else:
          shear_out = None

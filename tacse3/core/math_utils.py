@@ -1,4 +1,17 @@
 import numpy as np
+from scipy.spatial.transform import Rotation
+
+
+def clamp_rotation_step(vector, max_step_deg):
+    """Limit a finite rotation vector without changing its direction."""
+    vector = np.asarray(vector, dtype=float)
+    limit = float(max_step_deg)
+    if vector.shape != (3,) or not np.isfinite(vector).all():
+        raise ValueError("rotation must be a finite 3-vector")
+    if not np.isfinite(limit) or limit <= 0:
+        raise ValueError("max_step_deg must be positive and finite")
+    norm = float(np.linalg.norm(vector))
+    return vector * min(1.0, np.radians(limit) / norm) if norm else vector.copy()
 
 def rotvec_to_matrix(rvec: np.ndarray) -> np.ndarray:
     """Convert rotation vector to rotation matrix."""
@@ -11,18 +24,12 @@ def rotvec_to_matrix(rvec: np.ndarray) -> np.ndarray:
 
 def matrix_to_rotvec(Rm: np.ndarray) -> np.ndarray:
     """Convert rotation matrix to rotation vector."""
-    tr = float(np.trace(Rm))
-    cos_ang = (tr - 1.0) / 2.0
-    cos_ang = max(-1.0, min(1.0, cos_ang))
-    angle = float(np.arccos(cos_ang))
-    if abs(angle) < 1e-12:
-        return np.zeros(3, dtype=float)
-    denom = 2.0 * np.sin(angle)
-    rx = (Rm[2, 1] - Rm[1, 2]) / denom
-    ry = (Rm[0, 2] - Rm[2, 0]) / denom
-    rz = (Rm[1, 0] - Rm[0, 1]) / denom
-    axis = np.array([rx, ry, rz], dtype=float)
-    return axis * angle
+    matrix = np.asarray(Rm, dtype=float)
+    if matrix.shape != (3, 3) or not np.isfinite(matrix).all():
+        raise ValueError("rotation matrix must be finite and 3x3")
+    if not np.allclose(matrix.T @ matrix, np.eye(3), atol=1e-6) or not np.isclose(np.linalg.det(matrix), 1.0, atol=1e-6):
+        raise ValueError("matrix must be a proper rotation")
+    return Rotation.from_matrix(matrix).as_rotvec()
 
 def euler_degrees_to_matrix(euler_deg: list) -> np.ndarray:
     """Convert [x, y, z] Euler angles in degrees to a rotation matrix (extrinsic XYZ)."""

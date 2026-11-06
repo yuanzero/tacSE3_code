@@ -1,0 +1,7 @@
+include LICENSE README.md README.zh-CN.md CONTRIBUTING.md CHANGELOG.md UNIT_CALIBRATION.md
+recursive-include docs *.md *.png *.svg
+recursive-include scripts *.py *.sh
+recursive-include tests *.py
+global-exclude *.pyc *.log
+prune runs
+prune .github

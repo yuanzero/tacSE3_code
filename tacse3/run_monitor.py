@@ -93,7 +93,7 @@ def _make_apply_args(rt):
     a.frame = rt.frame
     a.no_invert_rotation = bool(getattr(rt, "no_invert_rotation", False))
     a.baseline_frames = int(rt.baseline_frames)
-    a.depth_in_mm = bool(getattr(rt, "depth_in_mm", False))
+    a.depth_in_mm = bool(getattr(rt, "depth_in_mm", True))
     a.use_divfree_only = bool(getattr(rt, "use_divfree_only", False))
     a.ppmm = float(rt.ppmm)
     a.contact_thresh_mm = float(rt.contact_thresh_mm)
@@ -140,7 +140,10 @@ def build_parser():
         help="Send estimator direction without negation (default negates for opposite TCP motion)",
     )
     p.add_argument("--baseline-frames", type=int, default=0, help="Frames to average for depth baseline")
-    p.add_argument("--depth-in-mm", action="store_true", help="Treat depth as millimeters")
+    depth_units = p.add_mutually_exclusive_group()
+    depth_units.add_argument("--depth-in-mm", dest="depth_in_mm", action="store_true", help="Treat SDK depth as nominal millimeters (default)")
+    depth_units.add_argument("--depth-in-m", dest="depth_in_mm", action="store_false", help="For adapters returning meters")
+    p.set_defaults(depth_in_mm=True)
     p.add_argument("--use-divfree-only", action="store_true", help="Helmholtz div-free shear component only")
     p.add_argument("--ppmm", type=float, default=DEFAULT_PPMM, help="Pixels per millimeter")
     p.add_argument("--contact-thresh-mm", type=float, default=DEFAULT_CONTACT_THRESH_MM, help="Contact mask depth threshold (mm)")
@@ -334,8 +337,7 @@ def main():
                 cfg = UR5Config(robot_ip=args.ip)
             robot = UR5Robot(cfg)
         except Exception as e:
-            log.warning("UR5 not available (%s); continuing without on-robot execution.", e)
-            robot = None
+            raise SystemExit(f"Robot initialization failed: {e}") from e
         else:
             log.info("Robot object created for %s (connection may occur in worker thread).", args.ip)
     else:
@@ -356,6 +358,7 @@ def main():
         log.info("Interrupted by user.")
     except Exception as e:
         log.error("Monitor failed: %s", e, exc_info=True)
+        raise SystemExit(1) from e
     finally:
         if robot is not None:
             try:

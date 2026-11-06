@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="240" viewBox="0 0 1000 240">
+  <rect width="1000" height="240" rx="24" fill="#111b2b"/>
+  <g fill="none" stroke="#263b53" stroke-width="1">
+    <path d="M580 40v160m40-160v160m40-160v160m40-160v160m40-160v160m40-160v160m40-160v160m40-160v160m40-160v160"/>
+    <path d="M560 60h380M560 100h380M560 140h380M560 180h380"/>
+  </g>
+  <path d="M570 140q55 0 85-40t65 0 65 0 65 0 80-10" fill="none" stroke="#7be1b8" stroke-width="4"/>
+  <path d="M570 155q70 0 105 10t60-35 65 10 65-5 65 0" fill="none" stroke="#8cbfff" stroke-width="3"/>
+  <circle cx="930" cy="90" r="6" fill="#7be1b8"/>
+  <text x="54" y="62" fill="#7be1b8" font-family="Arial,sans-serif" font-size="14" letter-spacing="4">TACTILE MOTION TOOLKIT</text>
+  <text x="50" y="135" fill="#f0f5ff" font-family="Arial,sans-serif" font-size="70" font-weight="700">TacSE3</text>
+  <text x="54" y="180" fill="#b0c1d9" font-family="Arial,sans-serif" font-size="21">Tactile motion, made visible.</text>
+</svg>

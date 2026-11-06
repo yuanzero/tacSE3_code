@@ -19,8 +19,8 @@ except Exception:
 
 from .contact_center_translation import ContactCenterTranslationState
 from .core.monitor import DaimonMonitor
-from .core.robot_control import compute_action_from_pose
-from .core.math_utils import rotvec_to_matrix, euler_angles_to_rotation_matrix
+from .core.robot_control import compute_action_from_pose, request_rotation
+from .core.math_utils import rotvec_to_matrix, euler_angles_to_rotation_matrix, clamp_rotation_step
 from .core.estimator import estimate_rotation_from_shear, pixel_xy_grid
 from .core.sensor_processing import build_contact_from_daimon
 
@@ -212,14 +212,14 @@ DEFAULT_MULTIPLY = 'left'         # Legacy matrix multiplication order
 
 # Algorithm parameters
 # 像素每毫米（传感器分辨率相关参数）
-DEFAULT_PPMM = 0.0634
+from .core.units import DEFAULT_PPMM
 # 剪切力缩放比例 (增大此值会增强剪切力信号，从而增大估算的旋转)
 DEFAULT_SHEAR_SCALE = 1.0
 
 # 基准帧数（用于校准归零）
 DEFAULT_BASELINE_FRAMES = 0
 # 深度数据是否以毫米为单位
-DEFAULT_DEPTH_IN_MM = False
+DEFAULT_DEPTH_IN_MM = True
 # 接触阈值（毫米）
 # Must match the contact mask logic in ``build_contact_from_daimon`` (legacy loop always used its default 0.5 mm).
 DEFAULT_CONTACT_THRESH_MM = 0.5
@@ -415,7 +415,10 @@ def add_primary_cli_args(p: argparse.ArgumentParser) -> None:
     arg('ppmm', type=float)
     arg('shear-scale', type=float)
     arg('baseline-frames', type=int)
-    arg('depth-in-mm', action='store_true')
+    depth_units = p.add_mutually_exclusive_group()
+    depth_units.add_argument('--depth-in-mm', dest='depth_in_mm', action='store_true')
+    depth_units.add_argument('--depth-in-m', dest='depth_in_mm', action='store_false')
+    p.set_defaults(depth_in_mm=defaults.get('depth_in_mm', DEFAULT_DEPTH_IN_MM))
     arg('contact-thresh-mm', type=float)
     arg('angle-scale', type=float)
     arg('angle-scale-x', type=float)
@@ -709,31 +712,7 @@ def simple_sensor_loop_cli(args, robot=None):
                             log.warning('RobotWorker getActualTCPPose failed: %s', e)
                             continue
                         try:
-                            # Unified logic: Always use compute_action_from_pose.
-                            # If send_delta is True, we interpret the input as a "small delta rotation"
-                            # to be applied to the current pose (in the chosen frame).
-                            if req.get('send_delta', False):
-                                omega_rad = req.get('omega_rad')
-                                if omega_rad is None:
-                                    # if only R is provided, try to extract omega, or just treat R as the delta
-                                    # For safety, if omage_rad is missing in delta mode, we default to 0
-                                    omega_rad = np.zeros(3, dtype=float)
-                                
-                                # Apply scaling to the delta vector
-                                scale = float(req.get('delta_scale', DEFAULT_ROTATION_SCALE))
-                                rvec_delta = np.asarray(omega_rad, dtype=float) * scale
-                                
-                                # Convert the scaled delta vector to a Rotation Matrix
-                                R_use = rotvec_to_matrix(rvec_delta)
-                            else:
-                                # Absolute target mode (or raw R application)
-                                R_use = req.get('R')
-                                if R_use is None and 'omega_rad' in req:
-                                    try:
-                                        R_use = euler_angles_to_rotation_matrix(np.asarray(req['omega_rad'], dtype=float))
-                                    except Exception:
-                                        R_use = np.eye(3)
-
+                            R_use = request_rotation(req)
                             # Now apply this rotation (whether delta or absolute) using the correct frame/offset logic
                             action = compute_action_from_pose(
                                 cur[:3], 
@@ -786,7 +765,7 @@ def simple_sensor_loop_cli(args, robot=None):
             for i, sens in enumerate(sensors):
                 try:
                     depths = [np.array(sens.getDepth(), dtype=np.float32) for _ in range(args.baseline_frames)]
-                    baselines[i] = np.mean(np.stack(depths, axis=0), axis=0) * (1000.0 if not getattr(args, 'depth_in_mm', False) else 1.0)
+                    baselines[i] = np.mean(np.stack(depths, axis=0), axis=0) * (1000.0 if not getattr(args, 'depth_in_mm', DEFAULT_DEPTH_IN_MM) else 1.0)
                 except Exception as e:
                     log.warning(f"Baseline acquisition failed for sensor {i}: {e}")
 
@@ -1249,12 +1228,9 @@ def simple_sensor_loop_cli(args, robot=None):
             except Exception:
                 pass
 
-            omega_norm = np.linalg.norm(omega_rad)
-            max_rad = np.radians(DEFAULT_MAX_STEP_DEG)
-            if omega_norm > max_rad:
-                scale_safe = max_rad / omega_norm
-                omega_rad = omega_rad * scale_safe
-                # log.warning(f"Clamped rotation step: {np.degrees(omega_norm):.1f}deg -> {DEFAULT_MAX_STEP_DEG}deg")
+            omega_rad = clamp_rotation_step(
+                omega_rad, getattr(args, 'max_step_deg', DEFAULT_MAX_STEP_DEG)
+            )
 
             # Opposite direction vs estimator (typical for tool-frame mapping); disable with --no-invert-rotation
             if not getattr(args, 'no_invert_rotation', DEFAULT_NO_INVERT_ROTATION):
@@ -1330,6 +1306,7 @@ def simple_sensor_loop_cli(args, robot=None):
                         'omega_rad': omega_send_rad,
                         'send_delta': bool(getattr(args, 'send_delta', False)),
                         'delta_scale': rotation_scale_val,
+                        'max_step_deg': float(getattr(args, 'max_step_deg', DEFAULT_MAX_STEP_DEG)),
                         'multiply': getattr(args, 'multiply', 'left'),
                         'frame': getattr(args, 'frame', 'global'),
                         'tool_offset_z': getattr(args, 'tool_offset_z', 0.0)
@@ -1414,7 +1391,7 @@ def simple_sensor_loop_cli(args, robot=None):
                         shear_vis = blank_for_arrows
                         if shear_m is not None and _put_arrows_on_image is not None:
                             try:
-                                shear_vis = _put_arrows_on_image(blank_for_arrows, shear_m * 50)
+                                shear_vis = _put_arrows_on_image(blank_for_arrows, shear_m * (1000.0 * args.ppmm) * 50)
                             except Exception:
                                 shear_vis = blank_for_arrows
                         

@@ -25,10 +25,11 @@ except Exception as e:
         Sensor = None
         _sensor_import_error = retry_error
 
-from .math_utils import rotvec_to_matrix
+from .math_utils import rotvec_to_matrix, clamp_rotation_step
 from .sensor_processing import build_contact_from_daimon
 from .estimator import estimate_rotation_from_shear
 from .fusion import fuse_rotations
+from .units import DEFAULT_PPMM
 from .robot_worker import RobotWorker
 
 log = logging.getLogger("daimon_monitor")
@@ -47,13 +48,13 @@ class DaimonMonitor:
     def __init__(self, 
                  sensor_serials: list, 
                  robot=None,
-                 ppmm=0.0634,
+                 ppmm=DEFAULT_PPMM,
                  shear_scale=1.0,
                  angle_scale=1.0, 
                  smooth_window=10,
                  min_change_deg=8.5,
                  baseline_frames=0,
-                 depth_in_mm=False,
+                 depth_in_mm=True,
                  use_divfree_only=False,
                  interval=0.05,
                  execute=False,
@@ -310,10 +311,7 @@ class DaimonMonitor:
         except Exception:
             pass
 
-        omega_norm = float(np.linalg.norm(to_send_rad))
-        max_rad = np.radians(self.max_step_deg)
-        if omega_norm > max_rad and omega_norm > 1e-12:
-            to_send_rad = np.asarray(to_send_rad, dtype=float) * (max_rad / omega_norm)
+        to_send_rad = clamp_rotation_step(to_send_rad, self.max_step_deg)
 
         if self.invert_rotation:
             to_send_rad = -np.asarray(to_send_rad, dtype=float)
@@ -336,6 +334,7 @@ class DaimonMonitor:
                 'tool_offset_z': self.tool_offset_z,
                 'send_delta': self.send_delta,
                 'delta_scale': self.delta_scale,
+                'max_step_deg': self.max_step_deg,
             }
             if self.send_delta:
                 req['omega_rad'] = to_send_robot_rad

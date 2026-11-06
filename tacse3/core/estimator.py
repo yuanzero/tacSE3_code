@@ -2,8 +2,11 @@
 
 import numpy as np
 import scipy.fft
+from .units import DEFAULT_PPMM
 
 def pixel_xy_grid(shape, ppmm):
+    if not np.isfinite(ppmm) or ppmm <= 0:
+        raise ValueError('ppmm must be positive and finite')
     H, W = shape
     xx = np.arange(W) - (W / 2.0) + 0.5
     yy = np.arange(H) - (H / 2.0) + 0.5
@@ -79,7 +82,7 @@ def helmholtz_decompose(U, V):
     return U_divfree, V_divfree, U_curlfree, V_curlfree
 
 
-def estimate_rotation_from_shear(depth_m, shear, ppmm=0.0634, contact_mask=None,
+def estimate_rotation_from_shear(depth_m, shear, ppmm=DEFAULT_PPMM, contact_mask=None,
                                  shear_scale=1.0, include_translation=True, rcond=None,
                                  use_divfree_only=True):
     """

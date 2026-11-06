@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "TacSE3 — Daimon tactile sensors, shear/depth SE(3) estimation, UR5 control (LeRobot)"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "TacSE3 contributors" }]
 dependencies = [
   "numpy>=1.23",
@@ -16,12 +17,28 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-viz = ["opencv-python-headless>=4.8", "open3d>=0.17"]
+demo = ["opencv-python>=4.8"]
+viz = ["opencv-python>=4.8", "open3d>=0.17"]
+headless = ["opencv-python-headless>=4.8"]
+dev = ["black>=24", "build>=1"]
 ur5 = []  # install LeRobot / robot stack separately; keeps core install light
 
 [project.scripts]
 tacse3-monitor = "tacse3.run_monitor:main"
+tacse3-ball-demo = "tacse3.ball_demo:main"
+tacse3-observe = "tacse3.observe:main"
+tacse3-replay = "tacse3.offline_replay:main"
+
+[project.urls]
+Repository = "https://github.com/yuanzero/tacSE3_code"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["tacse3*"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["*.pyc", "__pycache__/*", "*.log"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
