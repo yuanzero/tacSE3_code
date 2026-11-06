@@ -1,91 +1,128 @@
-<p align="center"><img src="docs/assets/banner.svg" alt="TacSE3 触觉运动可视化" width="920"></p>
+<p align="center"><img src="docs/assets/banner.svg" alt="TacSE3 触觉运动可视化" width="960"></p>
 
-<p align="center"><strong>触觉采集 · 动态反馈 · 离线回放 · SE(3) 估计</strong><br>
-<a href="README.md">English</a> · <a href="docs/ball-demo.md">演示说明</a> · <a href="docs/architecture.md">代码结构</a></p>
+<p align="center"><strong>触觉采集 → 运动估计 → 二维与三维反馈</strong><br>
+Python 3.10+ · NumPy / SciPy · OpenCV / Open3D · 可选机器人集成</p>
 
-TacSE3 从触觉传感器读取深度与剪切场，估计运动并实时显示反馈。
-交互入口提供手动拨球演示：在静止的两颗触觉传感器之间放入球体，
-观察接触区域、剪切箭头和旋转曲线。该入口只读取传感器，不连接机械臂或夹爪驱动。
+<p align="center"><a href="README.md">English</a> · <a href="#快速启动">快速启动</a> · <a href="docs/ball-demo.md">演示指南</a> · <a href="docs/architecture.md">架构说明</a> · <a href="CONTRIBUTING.md">参与开发</a></p>
 
-![双传感器拨球时的实际响应](docs/assets/ball-demo.png)
+TacSE3 将触觉传感器的深度与剪切数据转换为运动估计和可视化反馈。
+可以通过手动拨球观察接触变化、离线查看记录，也可以使用已有监控流程和可选 UR5 接口。
 
-*界面展示触觉图、深度图、剪切箭头和旋转曲线，支持原始/平滑显示切换。*
+| 采集 | 可视化 | 集成 |
+| :--- | :--- | :--- |
+| 触觉图像、深度与剪切场 | 接触区域、剪切箭头与历史曲线 | 主监控与旧版监控入口 |
+| 会话记录与响应快照 | 每颗传感器独立的三维坐标轴 | 接触中心平移与传感器融合 |
+| 明确单位的离线回放 | 原始/平滑模式与统一显示零点 | 可选 LeRobot / UR5 外部驱动 |
+
+## 界面预览
+
+<table>
+<tr><th>双传感器反馈面板</th><th>三维坐标轴</th></tr>
+<tr>
+<td align="center" valign="middle"><img src="docs/assets/ball-demo.png" alt="双传感器触觉面板" width="460"></td>
+<td align="center"><img src="docs/assets/pose-3d-0299.png" alt="第一颗传感器的记录帧三维预览" width="235"><br><img src="docs/assets/pose-3d-0016.png" alt="第二颗传感器的记录帧三维预览" width="235"></td>
+</tr>
+</table>
+
+*二维面板与独立记录帧的三维预览，非同步画面。灰色轴表示参考坐标系，RGB 轴表示当前选择的相对旋转估计。*
 
 ## 快速启动
 
-已有传感器环境可直接使用；通用安装需要另行准备厂商 `dmrobotics` SDK。
+在已有传感器环境中安装。实时采集需另行安装厂商 `dmrobotics` SDK，仓库不包含该 SDK。
+
+```bash
+pip install -e ".[viz]"
+python -m tacse3.ball_demo --sensor-serial SERIAL1 SERIAL2 --pose3d on
+```
+
+从桌面终端运行，等待无接触状态下的传感器初始化完成，再将球体放在静止的触觉表面之间手动拨动。
+此入口只读取传感器，不创建机械臂或夹爪驱动对象。
+
+| Z | R | S | Q / Esc |
+| :---: | :---: | :---: | :---: |
+| 显示归零 | 原始 / 平滑 | 保存二维与三维快照 | 关闭所有窗口 |
+
+使用快捷键前先点击二维面板。三维窗口与面板共用估计数据和显示零点。
+程序自动保存峰值快照和会话记录，默认位于 `runs/`；原始估计与平滑结果分别保留。
+
+<details>
+<summary><strong>仅二维显示与离线环境</strong></summary>
+
+二维桌面显示使用 `.[demo]`，离线图像导出使用 `.[headless]`，同一环境选择一种 OpenCV 发行包。
 
 ```bash
 pip install -e ".[demo]"
-python -m tacse3.ball_demo --sensor-serial SERIAL1 SERIAL2
+python -m tacse3.ball_demo --sensor-serial SERIAL1 SERIAL2 --pose3d off
 ```
 
-安装 `pip install -e ".[viz]"` 可启用 Open3D 三维坐标轴。
-检测到 Open3D 时，每颗传感器自动打开一个三维窗口；`--pose3d on` 要求启用三维，
-`--pose3d off` 仅显示二维面板。三维窗口与曲线共用显示模式和归零参考。
-
-1. 传感器无接触时启动，等待初始化完成。
-2. 放入适合现有间距的球，缓慢拨动、停顿、反向拨动。
-3. 按 **Z** 将显示归零，**R** 切换原始/平滑显示，**S** 保存快照，**Q** 退出。
-
-程序自动保留响应峰值和最新画面，无需每次手动截图。保存目录在终端输出，
-默认使用 `runs/` 下的独立会话目录。
-
-## 反馈稳定性
-
-- 原始估计保留在 `rotation_vector_rad`，平滑结果单独保存。
-- 默认显示采用三帧中值和 120 ms 时间常数的平滑，不改变估计器或控制器。
-- 少于 100 个接触像素时提示小接触区域；恢复接触后短暂等待再显示。
-- 接触消失即清除滤波历史，曲线留空，不把旧姿态当作新反馈。
-- 曲线固定在 ±15°，超出范围会提示；数值与原始记录不裁剪。
-
-这些参数用于演示显示，不是精度标定。详见[参数与记录格式](docs/ball-demo.md)。
-
-## 离线查看
+独立离线环境：
 
 ```bash
+pip install -e ".[headless]"
 python -m tacse3.ball_demo --sample sample.npz --preview-output preview.png
 python -m tacse3.offline_replay sample.npz \
   --depth-unit mm --shear-unit dmv1-code --mm-per-pixel 0.0634 --output replay.json
 ```
 
-离线图像导出环境可安装 `.[headless]`，桌面演示安装 `.[demo]`。
-同一环境选择一种 OpenCV 发行包；不需要为了本项目重装已有的传感器环境。
+</details>
+
+## 功能入口
+
+| 工作流 | 模块 | 数据来源 |
+| :--- | :--- | :--- |
+| 二维 / 三维交互演示 | `tacse3.ball_demo` | 传感器或已保存帧 |
+| 定时采集与 HTML 报告 | `tacse3.observe` | 传感器 |
+| 数值回放 | `tacse3.offline_replay` | 已保存数组 |
+| 监控与可选机器人集成 | `tacse3.run_monitor` | 配置的设备 |
+
+已有剪切估计、接触中心平移、双传感器融合、监控分支及机器人 worker 均保留。
+显示平滑属于演示层；单位约定和设备参数单独配置。相对运动反馈不等同于球体绝对姿态测量。
 
 ## 项目结构
 
 ```text
-tacse3/                      Python 主包
-├── ball_demo.py             交互演示与会话记录
-├── demo_view.py             图像面板与历史曲线
-├── demo_feedback.py         显示状态与平滑
-├── demo_pose.py             三维坐标轴接入
-├── observe.py               传感器采集与报告
-├── offline_replay.py        离线回放
-├── run_monitor.py           主监控入口
-├── sensor_loop.py           监控流程编排
-├── contact_center_translation.py  接触中心平移
-├── pose_visualizer.py       Open3D 可视化
-└── core/                    单位、估计、融合和机器人接口
-docs/                        使用指南与架构
-scripts/                     启动及数据分析工具
-tests/                       无硬件依赖的测试
-.github/workflows/           自动检查
+TacSE3/
+├── tacse3/
+│   ├── ball_demo.py                 会话与交互演示
+│   ├── demo_view.py                 图像与曲线
+│   ├── demo_feedback.py             显示状态与平滑
+│   ├── demo_pose.py                 三维显示接入
+│   ├── observe.py                   采集与报告
+│   ├── offline_replay.py            离线回放
+│   ├── run_monitor.py               监控命令入口
+│   ├── sensor_loop.py               监控流程
+│   ├── contact_center_translation.py
+│   ├── pose_visualizer.py           Open3D 渲染
+│   └── core/                       单位、估计、融合和机器人接口
+├── docs/                           文档与展示图片
+├── scripts/                        启动与分析工具
+├── tests/                          无硬件依赖的检查
+└── .github/workflows/              持续集成
 ```
 
-原始 monitor、旧版 monitor 分支、接触中心平移、双传感器融合、Open3D
-可视化和 UR5 worker 均保留。入口用法见[监控与采集指南](docs/legacy-usage.md)。
-输入输出量纲见[单位说明](UNIT_CALIBRATION.md)。
+## 文档导航
 
-## 开发与测试
+| 文档 | 内容 |
+| :--- | :--- |
+| [演示指南](docs/ball-demo.md) | 操作、参数、快照和记录格式 |
+| [架构说明](docs/architecture.md) | 模块职责与数据流 |
+| [监控与采集](docs/legacy-usage.md) | 原有入口与选项 |
+| [单位约定](UNIT_CALIBRATION.md) | 输入量纲与 SDK 数据配置 |
+| [贡献指南](CONTRIBUTING.md) | 开发流程与代码检查 |
+| [变更记录](CHANGELOG.md) | 项目能力与版本说明 |
+
+## 开发
 
 ```bash
+pip install -e ".[headless,dev]"
 python -B -m unittest discover -s tests -v
 python -m build
 ```
 
-测试不需要真实设备。新增显示代码与原估计/控制代码分离，便于逐步优化。
-参见[贡献说明](CONTRIBUTING.md)和[变更记录](CHANGELOG.md)。
+CI 在 Python 3.10 / 3.12 上执行无硬件检查；安装 Open3D 后还可执行相关几何检查。
+桌面三维渲染需要 OpenGL 会话。
 
-项目基于 [yuanzero/tacSE3_code](https://github.com/yuanzero/tacSE3_code)，
-保留原有 Apache-2.0 声明并补充[许可证正文](LICENSE)。厂商 SDK 不随源码分发。
+## 来源与许可
+
+基于 [yuanzero/tacSE3_code](https://github.com/yuanzero/tacSE3_code)，源于 `realtime_daimon_rot`。
+采用 [Apache-2.0](LICENSE)。厂商 SDK 和外部机器人驱动分别安装，遵循各自许可。

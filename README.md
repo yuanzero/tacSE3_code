@@ -1,95 +1,126 @@
-<p align="center"><img src="docs/assets/banner.svg" alt="TacSE3 — tactile motion, made visible" width="920"></p>
+<p align="center"><img src="docs/assets/banner.svg" alt="TacSE3 — tactile motion, made visible" width="960"></p>
 
-<p align="center"><strong>Live tactile feedback · Recorded replay · SE(3) estimation</strong><br>
-Python 3.10+ · NumPy / SciPy · Optional Daimon SDK and LeRobot integration</p>
+<p align="center"><strong>Tactile sensing → motion estimation → 2D & 3D feedback</strong><br>
+Python 3.10+ · NumPy / SciPy · OpenCV / Open3D · Optional robot integration</p>
 
-<p align="center"><a href="README.zh-CN.md">中文</a> · <a href="docs/ball-demo.md">Demo guide</a> · <a href="docs/architecture.md">Architecture</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
+<p align="center"><a href="README.zh-CN.md">中文</a> · <a href="#quick-start">Quick start</a> · <a href="docs/ball-demo.md">Demo guide</a> · <a href="docs/architecture.md">Architecture</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
 
-TacSE3 reads tactile depth and shear, estimates motion, and makes the response
-visible. Start with a hand-turned ball between stationary tactile fingertips:
-watch contact maps, shear arrows and per-sensor rotation traces without connecting
-a robot driver. The original monitoring and optional UR5 paths remain available.
+TacSE3 turns tactile depth and shear into motion estimates and visual feedback.
+Use the sensor-only workflow to explore contact with a hand-turned ball, inspect
+recordings offline, or use the existing monitor and optional UR5 integration.
 
-<p align="center"><img src="docs/assets/ball-demo.png" alt="Two tactile sensors responding during a hand-turned ball demonstration" width="660"></p>
+| Capture | Visualize | Integrate |
+| :--- | :--- | :--- |
+| Tactile images, depth and shear | Contact maps, arrows and motion histories | Existing monitor and legacy monitor |
+| Session logs and response snapshots | Per-sensor 3D coordinate frames | Centroid translation and sensor fusion |
+| Explicit-unit offline replay | Shared raw/smooth mode and display zero | Optional external LeRobot / UR5 driver |
 
-*Tactile images, depth maps, shear arrows and per-sensor rotation histories.*
+## In view
 
-## Choose a workflow
+<table>
+<tr><th>Sensor dashboard</th><th>3D coordinate frames</th></tr>
+<tr>
+<td align="center" valign="middle"><img src="docs/assets/ball-demo.png" alt="Two-sensor tactile dashboard" width="460"></td>
+<td align="center"><img src="docs/assets/pose-3d-0299.png" alt="Recorded-frame 3D preview for one sensor" width="235"><br><img src="docs/assets/pose-3d-0016.png" alt="Recorded-frame 3D preview for a second sensor" width="235"></td>
+</tr>
+</table>
 
-| Workflow | Entry | Needs hardware? |
-| --- | --- | --- |
-| Interactive ball demo | `python -m tacse3.ball_demo` | Tactile sensors only |
-| Bounded observation / recording | `python -m tacse3.observe` | Tactile sensors only |
-| Saved-frame numerical replay | `python -m tacse3.offline_replay` | No |
-| Original monitor / optional robot integration | `python -m tacse3.run_monitor` | Depends on mode |
+*Dashboard image and independent recorded-frame 3D previews; the images are not
+synchronized. Grey axes are the reference frame; RGB axes show the selected
+relative rotation estimate.*
 
 ## Quick start
 
-Install into your existing sensor environment for live use. Install the vendor's
-`dmrobotics` SDK separately; it is not bundled in this repository.
+Install into your sensor environment. The vendor `dmrobotics` SDK is a separate
+prerequisite for live acquisition and is not distributed with TacSE3.
+
+```bash
+pip install -e ".[viz]"
+python -m tacse3.ball_demo --sensor-serial SERIAL1 SERIAL2 --pose3d on
+```
+
+Run from a desktop terminal. Wait for unloaded sensors to initialize, place a
+ball between the stationary tactile surfaces, then turn it by hand. This entry
+reads the sensors without creating a robot or gripper driver.
+
+| Z | R | S | Q / Esc |
+| :---: | :---: | :---: | :---: |
+| Zero display | Raw / smooth | Save 2D + 3D frames | Close all views |
+
+Focus the dashboard to use shortcuts. The 3D views share its selected estimate
+and zero reference. Automatic peak snapshots and session records are saved under
+`runs/`; raw estimates remain available alongside display-filtered values.
+
+<details>
+<summary><strong>2D-only and offline installation</strong></summary>
+
+Use `.[demo]` for OpenCV-only desktop viewing and `.[headless]` for offline image
+export. Choose one OpenCV variant per environment.
 
 ```bash
 pip install -e ".[demo]"
-python -m tacse3.ball_demo --sensor-serial SERIAL1 SERIAL2
+python -m tacse3.ball_demo --sensor-serial SERIAL1 SERIAL2 --pose3d off
 ```
 
-Use a desktop terminal with GUI-enabled OpenCV.
-Install `.[viz]` to include Open3D coordinate-frame windows. The demo opens one
-3D window per sensor when Open3D is available; `--pose3d on` requires 3D support
-and `--pose3d off` selects the 2D-only view.
-
-1. Wait for sensor initialization with the surfaces unloaded.
-2. Place a suitable ball between the stationary fingertips and turn it by hand.
-3. Press **Z** to zero the display, **R** to compare raw/smooth feedback,
-   **S** to save frames, or **Q** to quit.
-
-Snapshots of the strongest response and the latest display are saved automatically.
-Raw estimates stay in the log alongside display-filtered values. The display
-filter is independent of estimation, fusion and robot-control code.
-
-For a saved NPZ, no sensor SDK or desktop is needed:
+In a separate offline environment:
 
 ```bash
-pip install -e ".[headless]"  # use in an offline environment, instead of [demo]
+pip install -e ".[headless]"
 python -m tacse3.ball_demo --sample sample.npz --preview-output preview.png
 python -m tacse3.offline_replay sample.npz \
   --depth-unit mm --shear-unit dmv1-code --mm-per-pixel 0.0634 --output replay.json
 ```
 
-Choose one OpenCV variant per environment. `[viz]` adds GUI OpenCV and Open3D
-for the original visualizer. `[headless]` is for image export and CI.
+</details>
+
+## Entry points
+
+| Workflow | Module | Data source |
+| :--- | :--- | :--- |
+| Interactive 2D / 3D demo | `tacse3.ball_demo` | Sensors or a saved frame |
+| Bounded recording and HTML summary | `tacse3.observe` | Sensors |
+| Numerical replay | `tacse3.offline_replay` | Saved arrays |
+| Monitor and optional robot integration | `tacse3.run_monitor` | Configured devices |
+
+The original shear estimator, contact-centroid translation, sensor fusion,
+monitor paths and robot worker remain available. Display filtering belongs to
+the demo layer. Unit conventions and device-specific parameters are documented
+separately; relative motion feedback is not an absolute ball-pose measurement.
 
 ## Project structure
 
 ```text
-tacse3/
-  ball_demo.py                 Interactive sensor-only demo
-  demo_view.py                 Image panels and history charts
-  demo_feedback.py             Display state and smoothing
-  demo_pose.py                 Per-sensor 3D coordinate windows
-  observe.py                   Sensor recording and reports
-  offline_replay.py            Saved-array replay
-  run_monitor.py              Main monitor CLI
-  sensor_loop.py               Monitor orchestration
-  contact_center_translation.py  Contact-centroid translation
-  pose_visualizer.py           Open3D visualization
-  core/                       Estimation, units, fusion and robot integration
-docs/                         Guides and architecture
-scripts/                      Launch and analysis utilities
-tests/                        Hardware-free tests
-.github/workflows/            Continuous integration
+TacSE3/
+├── tacse3/
+│   ├── ball_demo.py                 Session and interactive demo
+│   ├── demo_view.py                 Images and history charts
+│   ├── demo_feedback.py             Display state and smoothing
+│   ├── demo_pose.py                 Per-sensor 3D bridge
+│   ├── observe.py                   Recording and reports
+│   ├── offline_replay.py            Saved-array replay
+│   ├── run_monitor.py               Monitor CLI
+│   ├── sensor_loop.py               Monitor orchestration
+│   ├── contact_center_translation.py
+│   ├── pose_visualizer.py           Open3D renderer
+│   └── core/                       Units, estimation, fusion and robot interfaces
+├── docs/                           Guides and visual assets
+├── scripts/                        Launch and analysis utilities
+├── tests/                          Hardware-free checks
+└── .github/workflows/              Continuous integration
 ```
 
-The existing shear estimator, contact-centroid translation, dual-sensor fusion,
-legacy monitor, Open3D visualization and UR5 worker remain in the repository.
-Display stabilization only affects the ball-demo view. Read the
-[monitor and recording guide](docs/legacy-usage.md) for those entry points.
+## Documentation
 
-Nominal SDK units are documented in [unit conventions](UNIT_CALIBRATION.md).
-The ball demo is qualitative feedback, not a calibrated measurement of a ball's
-absolute orientation.
+| Guide | Contents |
+| :--- | :--- |
+| [Demo guide](docs/ball-demo.md) | Controls, display parameters, snapshots and records |
+| [Architecture](docs/architecture.md) | Module responsibilities and data flow |
+| [Monitor and recording](docs/legacy-usage.md) | Existing entry points and options |
+| [Unit conventions](UNIT_CALIBRATION.md) | Metric inputs and SDK profiles |
+| [Contributing](CONTRIBUTING.md) | Development workflow and checks |
+| [Changelog](CHANGELOG.md) | Project capabilities and release notes |
 
-## Develop and verify
+## Development
 
 ```bash
 pip install -e ".[headless,dev]"
@@ -97,14 +128,11 @@ python -B -m unittest discover -s tests -v
 python -m build
 ```
 
-Tests use synthetic arrays, recorded-data-compatible functions and fake devices.
-The CI workflow runs offline checks on Python 3.10 and 3.12; hardware is not needed.
-See [contributing](CONTRIBUTING.md), [architecture](docs/architecture.md),
-[display behavior](docs/ball-demo.md) and [changes](CHANGELOG.md).
+CI runs hardware-free checks on Python 3.10 and 3.12. Optional Open3D geometry
+checks run when Open3D is installed. Desktop rendering requires an OpenGL session.
 
 ## Origins and license
 
 Based on [yuanzero/tacSE3_code](https://github.com/yuanzero/tacSE3_code), factored
-from `realtime_daimon_rot`. The package retains its existing Apache-2.0 license
-declaration; the [license text](LICENSE) is included. Vendor SDKs and external
-robot drivers remain separately installed components with their own terms.
+from `realtime_daimon_rot`. [Apache-2.0](LICENSE). Vendor SDKs and external robot
+drivers are separately installed components with their own terms.
